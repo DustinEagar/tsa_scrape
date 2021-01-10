@@ -12,33 +12,44 @@ import numpy as np
 #Data from TSA on airline passenger flight volume year over year
 
 
-url = "https://www.tsa.gov/coronavirus/passenger-throughput?page=0"
-
-#Use a header to imitate a browser, else TSA server deines access.
+#Use a header to imitate a browser for data scraping.
 
 header = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.75 Safari/537.36",
     "X-Requested-With": "XMLHttpRequest"
     }
 
-r = requests.get(url, headers=header)
+#Creating an empty collection dataframe
+df = pd.DataFrame()
 
-table = pd.read_html(r.text)
+#We will iterate over pages in the dataset until we reach a page without data,
+#where we will break from the while loop.
 
-print("There are: ", len(table), " tables")
-print("Take a look at table 0")
-print(type(table[0]))
+i=0
+while True:      
+    try:
+        print(i)
+        url = "https://www.tsa.gov/coronavirus/passenger-throughput?page="+str(i)
+    
+        r = requests.get(url, headers=header)
 
-df = table[0]
+        table = pd.read_html(r.text)
+        
+        df = df.append(table[0])
+        i += 1
+    except ValueError:
+        print("Reached end of dataset. Loaded ", i, "pages of data.")
+        break
+    
+#Reindexing by date in ascending order, renaming columns        
 df.set_index("Date", inplace=True)
-#df = df.sort_index(ascending=True, axis=0)
 df = df.reindex(index = df.index[::-1])
-print(df.head())
-
-for col in df.columns:
-    print(col)
 
 
+df.rename(columns={"Total Traveler Throughput": "Travelers", "Total Traveler Throughput (1 Year Ago - Same Weekday)": "Travelers One Year Prior"}, inplace=True)
+print(df.columns)
+
+#Creating a basic plot to show the year over year difference in air traffic.
 plt.figure()
 df.plot()
 
@@ -50,7 +61,12 @@ plt.xticks(rotation=45)
 plt.show()
 
 
+#Average negative change in airline traffic from start to end of dataset.
+avg_margin = (np.sum(df["Travelers One Year Prior"])/len(df) - np.sum(df["Travelers"])/len(df))/(np.sum(df["Travelers One Year Prior"])/len(df))
 
-avg_margin = (np.sum(df["Total Traveler Throughput (1 Year Ago - Same Weekday)"])/len(df) - np.sum(df["Total Traveler Throughput"])/len(df))/(np.sum(df["Total Traveler Throughput (1 Year Ago - Same Weekday)"])/len(df))
+#variables for points in dataset
+data_start = df.index[0]
+data_end = df.index[-1]
 
-print(avg_margin)
+#A print statement that gives the average change in air traffic volume since the start of the COVID-19 pandemic.
+print("Between ", data_start, " and ", data_end, ", air traffic volume in the United States decreased by, ", np.round(100*avg_margin, 2), "percent on average.")
